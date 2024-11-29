@@ -5,6 +5,9 @@ import pathfinder from 'mineflayer-pathfinder'
 import { comeHandler } from './commands/come.js'
 import { gotoxzHandler } from './commands/gotoxz.js'
 import { treeHandler } from './commands/tree.js'
+import { StateTransition, BotStateMachine, EntityFilters, BehaviorFollowEntity, NestedStateMachine } from 'mineflayer-statemachine'
+import { idleState, initStates } from './states.js'
+import { getTransitions } from './transitions.js'
 
 interface Env {
   MC_HOST: string
@@ -31,6 +34,13 @@ async function main(): Promise<void> {
     movement.allow1by1towers = true
     movement.allowFreeMotion = true
     bot.pathfinder.setMovements(movement)
+    const targets = {};
+    initStates(bot, targets)
+    if (!idleState) {
+      throw new Error('States not initialized')
+    }
+    const rootLayer = new NestedStateMachine(getTransitions(bot, targets), idleState)
+    new BotStateMachine(bot, rootLayer)
   })
 
   bot.on('whisper', async (username: string, message: string) => {

@@ -5,6 +5,9 @@ import consola from 'consola'
 import pathfinder from 'mineflayer-pathfinder'
 import { distance, ROOT_DIR, sleep } from '../utils/utils.js'
 import { Vec3 } from 'vec3'
+import { StateTransition, BehaviorIdle, StateMachineTargets } from 'mineflayer-statemachine'
+import { idleState, treeFactoryState } from '../states.js'
+import { treeEndTransition, treeStartTransition } from '../transitions.js'
 
 interface Coordinates {
     stand: Vec3 | null
@@ -19,7 +22,7 @@ if (!fs.existsSync(path.dirname(COORDS_FILE_PATH))) {
 }
 
 // Load coordinates from file
-function loadCoordinates(): Coordinates {
+export function loadCoordinates(): Coordinates {
     if (fs.existsSync(COORDS_FILE_PATH)) {
         const data = fs.readFileSync(COORDS_FILE_PATH, 'utf8')
         const coords = JSON.parse(data) as Coordinates
@@ -33,7 +36,7 @@ function loadCoordinates(): Coordinates {
 }
 
 // Save coordinates to file
-function saveCoordinates(coords: Coordinates): void {
+export function saveCoordinates(coords: Coordinates): void {
     // Convert Vec3 back to plain objects before saving
     const saveData = {
         stand: coords.stand ? { x: coords.stand.x, y: coords.stand.y, z: coords.stand.z } : null,
@@ -69,146 +72,14 @@ export function handleSetTree(bot: Bot, x: number, y: number, z: number): void {
     bot.chat(`Tree position set to: ${x}, ${y}, ${z}`)
 }
 
-let treePlacingInterval: NodeJS.Timeout | null = null
-let errCnt: Map<string, number> = new Map()
-let checkHand = async function (bot: Bot, name: string): Promise<void> {
-    const nowHand = bot.inventory.slots[bot.getEquipmentDestSlot('hand')]
-    if (nowHand && nowHand.name !== name || !nowHand) {
-        // await bot.unequip('hand')
-        let flag = false
-        for (const item of bot.inventory.slots) {
-            if (item == null) continue
-            if (item.name === name) {
-                await bot.equip(item, 'hand')
-                flag = true
-            }
-            if (item.name !== 'bone_meal' && item.name !== 'cherry_sapling') {
-                await bot.tossStack(item)
-            }
-        }
-        if (!flag) {
-            let errCntNow = errCnt.get(name)
-            if (!errCntNow) {
-                errCntNow = 0
-            }
-            ++errCntNow;
-            errCnt.set(name, errCntNow)
-            consola.log('errCntNow:', errCntNow)
-
-            if (errCntNow > 50) {
-                consola.error(`No ${name} in inventory, stopping tree factory.`)
-                bot.chat(`No ${name} in inventory, stopping tree factory.`)
-                handleStop(bot)
-                return
-            }
-            return
-        }
-    }
-}
-async function plantTree(bot: Bot, coords: any): Promise<void> {
-    if (!coords.stand) {
-        consola.warn('No stand position set.')
-        return
-    }
-    if (!coords.lever) {
-        consola.warn('No lever position set.')
-        return
-    }
-    if (!coords.tree) {
-        consola.warn('No tree position set.')
-        return
-    }
-    if (distance(coords.stand, bot.entity.position) > 1
-        || bot.pathfinder.isMoving() || bot.pathfinder.isMining()
-        || bot.pathfinder.isBuilding()) {
-        consola.debug('Bot is moving to stand position.')
-        return
-    }
-    consola.info('Placing tree.')
-    const leverBlock = bot.blockAt(coords.lever)
-    // consola.log(leverBlock)
-    if (leverBlock && leverBlock.getProperties().powered == true) {
-        await bot.activateBlock(leverBlock)
-        await sleep(1000)
-    }
-    const treeBlock = bot.blockAt(new Vec3(coords.tree.x, coords.tree.y + 1, coords.tree.z))
-    // consola.log(treeBlock)
-    const dirtBlock = bot.blockAt(coords.tree)
-    if (dirtBlock) {
-        if (treeBlock && treeBlock.type === 0) {
-            await checkHand(bot, 'cherry_sapling')
-            await bot.placeBlock(dirtBlock, new Vec3(0, 1, 0))
-        } else if (treeBlock && treeBlock.type !== 0) {
-            await checkHand(bot, 'bone_meal')
-            await bot.activateBlock(treeBlock)
-        }
-    } else {
-        consola.warn('No dirt block to place tree.')
-        bot.chat('No dirt block to place tree.')
-        handleStop(bot)
-    }
-}
-
 // Command handler for "tree start"
 export async function handleStart(bot: Bot): Promise<void> {
-    errCnt.set('cherry_sapling', 0)
-    errCnt.set('bone_meal', 0)
-    if (treePlacingInterval) {
-        consola.warn('Block placing task is already running.')
-        bot.chat('Block placing task is already running.')
-        return
-    }
-    consola.log(bot.inventory.slots)
-    const coords = loadCoordinates()
-    if (!coords.stand) {
-        consola.warn('No stand position set.')
-        return
-    }
-    if (!coords.lever) {
-        consola.warn('No lever position set.')
-        return
-    }
-    if (!coords.tree) {
-        consola.warn('No tree position set.')
-        return
-    }
-    consola.info(`Bot moving to tree stand position: ${coords.stand.x}, ${coords.stand.y}, ${coords.stand.z}`)
-    bot.chat(`Bot moving to tree stand position: ${coords.stand.x}, ${coords.stand.y}, ${coords.stand.z}`)
-    bot.pathfinder.setGoal(new pathfinder.goals.GoalNear(coords.stand.x, coords.stand.y, coords.stand.z, 0.1), true)
-    // consola.log(bot.inventory.slots)
-    //create a process to place block
-    treePlacingInterval = setInterval(async () => {
-        try {
-            await plantTree(bot, coords)
-        } catch (err) {
-            consola.error(err)
-        }
-    }, 200)
+    treeStartTransition?.trigger()
 }
 
 // Command handler for "tree stop"
 export async function handleStop(bot: Bot): Promise<void> {
-    const coords = loadCoordinates()
-    bot.pathfinder.stop()
-    if (!treePlacingInterval) {
-        consola.warn('Tree factory is not running.')
-        bot.chat('Tree factory is not running.')
-        return
-    }
-    clearInterval(treePlacingInterval)
-    treePlacingInterval = null
-    if (!coords.lever) {
-        consola.warn('No lever position set.')
-        return
-    }
-    const leverBlock = bot.blockAt(coords.lever)
-    // consola.log(leverBlock)
-    if (leverBlock && leverBlock.getProperties().powered == false) {
-        await bot.activateBlock(leverBlock)
-        await sleep(1000)
-    }
-    consola.info('Tree factory stopped.')
-    bot.chat('Tree factory stopped.')
+    treeEndTransition?.trigger()
 }
 
 export function treeHandler(bot: Bot, message: string): void {
