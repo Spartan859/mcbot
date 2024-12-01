@@ -6,18 +6,20 @@ import { Vec3 } from "vec3";
 import { loadCoordinates } from "../commands/tree.js";
 import { treeEndTransition } from "../transitions.js";
 import pathfinder from "mineflayer-pathfinder";
+import { MyTargets } from "../states.js";
 
 export class BehaviorTreeFactory implements StateBehavior {
     readonly bot: Bot
-    readonly targets: StateMachineTargets
+    readonly targets: MyTargets
 
     stateName: string = 'treeFactory'
     active: boolean = false
+    plantTreeActive: boolean = false
 
     treePlacingInterval: NodeJS.Timeout | null = null
     errCnt: Map<string, number> = new Map()
 
-    constructor(bot: Bot, targets: StateMachineTargets) {
+    constructor(bot: Bot, targets: MyTargets) {
         this.bot = bot
         this.targets = targets
     }
@@ -58,10 +60,19 @@ export class BehaviorTreeFactory implements StateBehavior {
     }
 
     plantTree = async (bot: Bot, coords: any): Promise<void> => {
+        if (this.targets.state !== this.stateName) {
+            await this.end();
+            return
+        }
         if (distance(coords.stand, bot.entity.position) > 1
             || bot.pathfinder.isMoving() || bot.pathfinder.isMining()
             || bot.pathfinder.isBuilding()) {
             consola.debug('Bot is moving to stand position.')
+            if (this.plantTreeActive) {
+                setTimeout(() => {
+                    this.plantTree(bot, coords)
+                }, 200)
+            }
             return
         }
         consola.info('Placing tree.')
@@ -69,7 +80,6 @@ export class BehaviorTreeFactory implements StateBehavior {
         // consola.log(leverBlock)
         if (leverBlock && leverBlock.getProperties().powered == true) {
             await bot.activateBlock(leverBlock)
-            await sleep(1000)
         }
         const treeBlock = bot.blockAt(new Vec3(coords.tree.x, coords.tree.y + 1, coords.tree.z))
         // consola.log(treeBlock)
@@ -87,9 +97,14 @@ export class BehaviorTreeFactory implements StateBehavior {
             bot.chat('No dirt block to place tree.')
             treeEndTransition?.trigger()
         }
+        if (this.plantTreeActive) {
+            setTimeout(() => {
+                this.plantTree(bot, coords)
+            }, 200)
+        }
     }
 
-    async onStateEntered(): Promise<void> {
+    start(): void {
         this.errCnt.set('cherry_sapling', 0)
         this.errCnt.set('bone_meal', 0)
         const coords = loadCoordinates()
@@ -117,15 +132,18 @@ export class BehaviorTreeFactory implements StateBehavior {
             ${coords.stand.y}, ${coords.stand.z}`)
         this.bot.pathfinder.setGoal(new pathfinder.goals.GoalNear(
             coords.stand.x, coords.stand.y, coords.stand.z, 0.1), true)
-        this.treePlacingInterval = setInterval(async () => {
-            try {
-                await this.plantTree(this.bot, coords)
-            } catch (err) {
-                consola.error(err)
-            }
-        }, 200)
+        this.plantTreeActive = true
+        this.plantTree(this.bot, coords)
     }
-    async onStateExited(): Promise<void> {
+
+    onStateEntered(): void {
+        this.targets.state = this.stateName
+        this.start()
+        // while (!started) { }
+    }
+
+    async end(): Promise<void> {
+        this.plantTreeActive = false
         const coords = loadCoordinates()
         this.bot.pathfinder.stop()
         if (this.treePlacingInterval) {
@@ -140,9 +158,18 @@ export class BehaviorTreeFactory implements StateBehavior {
         // consola.log(leverBlock)
         if (leverBlock && leverBlock.getProperties().powered == false) {
             await this.bot.activateBlock(leverBlock)
-            await sleep(1000)
         }
+        this.bot.pathfinder.setGoal(null)
         consola.info('Tree factory stopped.')
         this.bot.chat('Tree factory stopped.')
+        treeEndTransition?.trigger()
+    }
+
+    onStateExited(): void {
+        consola.info('BehaviorTreeFactory: onStateExited')
+        this.bot.chat('BehaviorTreeFactory: onStateExited')
+        if (this.targets.state == this.stateName) {
+            this.targets.state = undefined
+        }
     }
 }

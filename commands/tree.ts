@@ -6,7 +6,7 @@ import pathfinder from 'mineflayer-pathfinder'
 import { distance, ROOT_DIR, sleep } from '../utils/utils.js'
 import { Vec3 } from 'vec3'
 import { StateTransition, BehaviorIdle, StateMachineTargets } from 'mineflayer-statemachine'
-import { idleState, treeFactoryState } from '../states.js'
+import { idleState, targets, treeFactoryState } from '../states.js'
 import { treeEndTransition, treeStartTransition } from '../transitions.js'
 
 interface Coordinates {
@@ -74,7 +74,7 @@ export function handleSetTree(bot: Bot, x: number, y: number, z: number): void {
 
 // Command handler for "tree start"
 export async function handleStart(bot: Bot): Promise<void> {
-    treeStartTransition?.trigger()
+    targets.state = treeFactoryState?.stateName
 }
 
 // Command handler for "tree stop"

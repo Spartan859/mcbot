@@ -38,6 +38,9 @@ Support commands in game:
 - `/msg <bot> tree start`: The bot will turn on the tree factory by activating the lever, then plant trees continuously.
 - `/msg <bot> tree stop`: The bot will turn off the tree factory and stand by(Implement later with FSM).
 
+### sleep
+- `/msg <bot> sleep`: The bot will automatically find a bed which can be reached without digging or building and sleep. Will wake up on other tasks.
+
 ## Contributing
 
 PRs are welcome.

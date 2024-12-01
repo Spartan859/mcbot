@@ -6,8 +6,9 @@ import { comeHandler } from './commands/come.js'
 import { gotoxzHandler } from './commands/gotoxz.js'
 import { treeHandler } from './commands/tree.js'
 import { StateTransition, BotStateMachine, EntityFilters, BehaviorFollowEntity, NestedStateMachine } from 'mineflayer-statemachine'
-import { idleState, initStates } from './states.js'
+import { idleState, initStates, targets } from './states.js'
 import { getTransitions } from './transitions.js'
+import { sleepHandler } from './commands/sleep.js'
 
 interface Env {
   MC_HOST: string
@@ -34,7 +35,6 @@ async function main(): Promise<void> {
     movement.allow1by1towers = true
     movement.allowFreeMotion = true
     bot.pathfinder.setMovements(movement)
-    const targets = {};
     initStates(bot, targets)
     if (!idleState) {
       throw new Error('States not initialized')
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
 
   bot.on('whisper', async (username: string, message: string) => {
     if (message === 'come') {
-      await comeHandler(bot, username)
+      comeHandler(bot, username)
     }
 
     if (message.startsWith('gotoxz')) {
@@ -54,6 +54,10 @@ async function main(): Promise<void> {
 
     if (message.startsWith('tree')) {
       treeHandler(bot, message)
+    }
+
+    if (message.startsWith('sleep')) {
+      sleepHandler(bot, message)
     }
   })
 }
