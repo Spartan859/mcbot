@@ -32,21 +32,20 @@ export class BehaviorSleep implements StateBehavior {
         if (!bed) {
             this.bot.chat('No bed found')
             consola.error('No bed found')
-            sleepEndTransition?.trigger()
+            await this.end()
             return
         }
         //use the bed to sleep
-        await this.bot.sleep(bed).catch((err) => {
+        await this.bot.sleep(bed).catch(async (err) => {
             this.bot.chat(`Error while sleeping: ${err}`)
             consola.error(`Error while sleeping: ${err}`)
-            sleepEndTransition?.trigger()
+            await this.end()
         })
-        // sleepEndTransition?.trigger()
     }
 
     async startLoop() {
         if (this.targets.state !== this.stateName) {
-            sleepEndTransition?.trigger()
+            this.end()
             return
         }
         await this.loop()
@@ -55,7 +54,19 @@ export class BehaviorSleep implements StateBehavior {
         }, 200);
     }
 
-    onStateEntered() {
+    async end() {
+        this.targets.position = undefined
+        if (this.targets.state === this.stateName) {
+            this.targets.state = undefined
+        }
+        await this.bot.wake().catch((err) => {
+            // this.bot.chat(`Error while waking up: ${err}`)
+            consola.error(`Error while waking up: ${err}`)
+        })
+        sleepEndTransition?.trigger()
+    }
+
+    async onStateEntered() {
         this.targets.state = this.stateName
         this.bot.chat('BehaviorSleep: onStateEntered')
         consola.info('BehaviorSleep: onStateEntered')
@@ -80,7 +91,7 @@ export class BehaviorSleep implements StateBehavior {
         if (!bed) {
             this.bot.chat('No bed found')
             consola.error('No bed found')
-            sleepEndTransition?.trigger()
+            await this.end();
             return
         }
         this.bot.chat(`Found bed at ${bed.position.x}, ${bed.position.y}, ${bed.position.z}`)
@@ -93,15 +104,6 @@ export class BehaviorSleep implements StateBehavior {
         this.startLoop()
     }
     async onStateExited() {
-        this.targets.position = undefined
-        if (this.targets.state === this.stateName) {
-            this.targets.state = undefined
-        }
-        await this.bot.wake().catch((err) => {
-            // this.bot.chat(`Error while waking up: ${err}`)
-            consola.error(`Error while waking up: ${err}`)
-        })
-        await sleep(1000)
         this.bot.chat('BehaviorSleep: onStateExited')
         consola.info('BehaviorSleep: onStateExited')
     }

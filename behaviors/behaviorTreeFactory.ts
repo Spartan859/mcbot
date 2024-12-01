@@ -51,7 +51,7 @@ export class BehaviorTreeFactory implements StateBehavior {
                 if (errCntNow > 50) {
                     consola.error(`No ${name} in inventory, stopping tree factory.`)
                     bot.chat(`No ${name} in inventory, stopping tree factory.`)
-                    treeEndTransition?.trigger()
+                    await this.end()
                     return
                 }
                 return
@@ -95,7 +95,7 @@ export class BehaviorTreeFactory implements StateBehavior {
         } else {
             consola.warn('No dirt block to place tree.')
             bot.chat('No dirt block to place tree.')
-            treeEndTransition?.trigger()
+            await this.end()
         }
         if (this.plantTreeActive) {
             setTimeout(() => {
@@ -104,26 +104,27 @@ export class BehaviorTreeFactory implements StateBehavior {
         }
     }
 
-    start(): void {
+    async onStateEntered() {
+        this.targets.state = this.stateName
         this.errCnt.set('cherry_sapling', 0)
         this.errCnt.set('bone_meal', 0)
         const coords = loadCoordinates()
         if (!coords.stand) {
             consola.warn('No stand position set.')
             this.bot.chat('No stand position set.')
-            treeEndTransition?.trigger()
+            await this.end()
             return
         }
         if (!coords.lever) {
             consola.warn('No lever position set.')
             this.bot.chat('No lever position set.')
-            treeEndTransition?.trigger()
+            await this.end()
             return
         }
         if (!coords.tree) {
             consola.warn('No tree position set.')
             this.bot.chat('No tree position set.')
-            treeEndTransition?.trigger()
+            await this.end()
             return
         }
         consola.info(`Bot moving to tree stand position: ${coords.stand.x}, 
@@ -134,12 +135,6 @@ export class BehaviorTreeFactory implements StateBehavior {
             coords.stand.x, coords.stand.y, coords.stand.z, 0.1), true)
         this.plantTreeActive = true
         this.plantTree(this.bot, coords)
-    }
-
-    onStateEntered(): void {
-        this.targets.state = this.stateName
-        this.start()
-        // while (!started) { }
     }
 
     async end(): Promise<void> {
