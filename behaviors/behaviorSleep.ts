@@ -45,7 +45,7 @@ export class BehaviorSleep implements StateBehavior {
 
     async startLoop() {
         if (this.targets.state !== this.stateName) {
-            this.end()
+            await this.end()
             return
         }
         await this.loop()
